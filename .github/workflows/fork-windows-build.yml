@@ -1,9 +1,12 @@
-# Unsigned Windows installer for the large-meetings fork. Manual trigger only.
+# Unsigned Windows installer for the large-meetings fork, built on every push
+# to that branch.
 # Calendar, Slack, Linear and GitHub integrations need upstream's secrets and
 # are not configured here; OpenWhispr Cloud login and API work.
 name: Fork Windows build
 
 on:
+  push:
+    branches: [large-meetings]
   workflow_dispatch:
 
 permissions:
