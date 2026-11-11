@@ -10,6 +10,13 @@ test("keeps a usable stored count", () => {
   assert.equal(normalizeStoredSpeakerCount(MAX_SPEAKER_COUNT), MAX_SPEAKER_COUNT);
 });
 
+// Management meetings run 10-16 people; a cap of 8 folded the rest into
+// whoever sounded closest.
+test("supports meetings of up to 16 people", () => {
+  assert.ok(MAX_SPEAKER_COUNT >= 16);
+  assert.equal(normalizeStoredSpeakerCount(13), 13);
+});
+
 test("clamps above the supported maximum", () => {
   assert.equal(normalizeStoredSpeakerCount(MAX_SPEAKER_COUNT + 5), MAX_SPEAKER_COUNT);
 });
