@@ -1,0 +1,60 @@
+# Unsigned Windows installer for the large-meetings fork. Manual trigger only.
+# Calendar, Slack, Linear and GitHub integrations need upstream's secrets and
+# are not configured here; OpenWhispr Cloud login and API work.
+name: Fork Windows build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
+
+      - name: Speaker and diarization tests
+        run: >-
+          node --import tsx --test
+          test/helpers/diarizationPolicy.test.js
+          test/helpers/speakerCount.test.js
+          test/helpers/liveSpeakerIdentifier.test.js
+          test/helpers/liveSpeakerIdPolicy.test.js
+          test/helpers/meetingDiarizationSpeakers.test.js
+
+      - name: Download and compile bundled binaries
+        run: npm run prebuild:win
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build unsigned installer
+        run: npm run build:win -- --publish never --config electron-builder.unsigned-win.json
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          VITE_AUTH_URL: https://auth.openwhispr.com
+          VITE_OPENWHISPR_API_URL: https://api.openwhispr.com
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: openwhispr-large-meetings-windows
+          path: dist/*.exe
+          retention-days: 14
