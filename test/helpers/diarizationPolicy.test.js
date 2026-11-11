@@ -517,3 +517,65 @@ test("two profiles within 0.03 of each other only suggest the closer one", () =>
   assert.deepEqual(matchOf(profileVoice(1, 0.8), profileVoice(2, 0.78)), [1, false]);
   assert.deepEqual(matchOf(profileVoice(1, 0.8), profileVoice(2, 0.76)), [1, true]);
 });
+
+// A 65-minute, 13-person Hungarian management meeting (Teams transcript as
+// ground truth): at 0.5 different people's voices merged long before the
+// count-based 0.7 bar applied, so labelled accuracy stayed at 59% whatever
+// count was entered; at 0.7 throughout it was 94%. With many voices, the 11%
+// of different-person pairs above 0.5 add up to several false merges.
+test("in a meeting counted at five or more voices, two alike people stay apart", () => {
+  const e = (i, scale = 1) => Array.from({ length: 6 }, (_, k) => (k === i ? scale : 0));
+  const add = (a, b) => a.map((v, k) => v + b[k]);
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 9, 10),
+    ...cluster("speaker_2", 8, 10),
+    ...cluster("speaker_3", 7, 10),
+    ...cluster("speaker_4", 6, 10),
+    ...cluster("speaker_5", 2, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", e(0)],
+    // a different person who sounds like speaker_0 (0.65)
+    ["speaker_1", add(e(0, 0.65), e(1, Math.sqrt(1 - 0.65 ** 2)))],
+    ["speaker_2", e(2)],
+    ["speaker_3", e(3)],
+    ["speaker_4", e(4)],
+    // a split of speaker_4's own voice that drifted (0.6)
+    ["speaker_5", add(e(4, 0.6), e(5, 0.8))],
+  ]);
+  const merged = mergeClustersByVoice(segments, centroids, dot, 5);
+  assert.ok(
+    speakersOf(merged).includes("speaker_1"),
+    "speaker_1 must not be folded into the alike speaker_0"
+  );
+  // The cap then folds the drifted split into the voice it belongs to.
+  const capped = capSpeakerClustersByVoice(merged, 5, centroids, dot);
+  assert.deepEqual(speakersOf(capped), [
+    "speaker_0",
+    "speaker_1",
+    "speaker_2",
+    "speaker_3",
+    "speaker_4",
+  ]);
+  assert.ok(capped.filter((s) => s.speaker === "speaker_4").length === 8);
+});
+
+test("a small counted call still merges alike clusters at 0.5", () => {
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 4, 10),
+    ...cluster("speaker_2", 8, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0.6, 0.8]],
+    ["speaker_2", [0, 1]],
+  ]);
+  // three clusters, two counted voices: speaker_1 (0.6 to speaker_0, 0.8 to
+  // speaker_2) joins speaker_2 under the 0.5 bar before the count is reached
+  assert.deepEqual(speakersOf(mergeClustersByVoice(segments, centroids, dot, 2)), [
+    "speaker_0",
+    "speaker_2",
+  ]);
+});

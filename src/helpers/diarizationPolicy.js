@@ -57,6 +57,14 @@ const VOICE_MERGE_SIMILARITY = 0.5;
 // only when they are near certain to be one person: under 1 % of voices had a
 // different speaker at 0.7 or more (the live recluster bar).
 const CERTAIN_VOICE_MERGE_SIMILARITY = 0.7;
+// With many voices, 0.5 is no longer safe: at 11 % of different-person pairs
+// over it, a 13-person meeting has some 78 pairs and so several false merges,
+// and they happen before the count-based bar above is reached. On a 65-minute
+// 13-person meeting (Teams transcript as ground truth) labelled accuracy was
+// 59 % at 0.5 whatever count was entered, and 94 % with the 0.7 bar
+// throughout. So from this many counted voices up, only near-certain pairs merge
+// and the speaker cap folds the remaining splits by voice.
+const LARGE_MEETING_VOICES = 5;
 
 // From this similarity up, a post-call voice (the centroid of a cluster's
 // longest segments) is a stored profile's person, provided that profile also
@@ -148,7 +156,8 @@ function isCollapsedDiarization(segments) {
 // the larger cluster keeps its label. Clusters without a centroid stay as they
 // are. `countedVoices` is how many voices the user said there are: down to that
 // many, only pairs at CERTAIN_VOICE_MERGE_SIMILARITY still merge, so two of
-// the people counted aren't folded into one for sounding alike.
+// the people counted aren't folded into one for sounding alike. From
+// LARGE_MEETING_VOICES counted voices up, that bar holds from the start.
 function mergeClustersByVoice(segments, centroids, similarity, countedVoices = 0) {
   const { clusters } = summarizeClusters(segments);
   const groups = [...clusters]
@@ -162,7 +171,9 @@ function mergeClustersByVoice(segments, centroids, similarity, countedVoices = 0
 
   for (;;) {
     const mergeSimilarity =
-      groups.length > countedVoices ? VOICE_MERGE_SIMILARITY : CERTAIN_VOICE_MERGE_SIMILARITY;
+      groups.length > countedVoices && countedVoices < LARGE_MEETING_VOICES
+        ? VOICE_MERGE_SIMILARITY
+        : CERTAIN_VOICE_MERGE_SIMILARITY;
     let closest = null;
     for (let i = 0; i < groups.length; i += 1) {
       for (let j = i + 1; j < groups.length; j += 1) {
